@@ -1,18 +1,23 @@
-import { Configuration, OpenAIApi } from "openai";
+import OpenAI from "openai";
 import { splitCode } from "./split-file.js";
 import {
   Rename,
   renameVariablesAndFunctions,
 } from "./rename-variables-and-functions.js";
 import { mapPromisesParallel } from "./run-promises-in-parallel.js";
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 type Options = {
   apiKey: string;
   use4k: boolean;
+  proxyURL?: string;
 };
 
-export default ({ apiKey, use4k }: Options) => {
-  const client = new OpenAIApi(new Configuration({ apiKey }));
+export default ({ apiKey, use4k, proxyURL }: Options) => {
+  const client = new OpenAI({
+    apiKey,
+    httpAgent: proxyURL ? new HttpsProxyAgent(proxyURL) : undefined,
+  });
 
   return async (code: string): Promise<string> => {
     const codeBlocks = await splitCode(code, use4k);
@@ -26,8 +31,8 @@ export default ({ apiKey, use4k }: Options) => {
   };
 
   async function codeToVariableRenames(code: string) {
-    const chatCompletion = await client.createChatCompletion({
-      model: use4k ? "gpt-3.5-turbo" : "gpt-3.5-turbo-16k",
+    const chatCompletion = await client.chat.completions.create({
+      model: "gpt-4-turbo-preview",
       functions: [
         {
           name: "rename_variables_and_functions",
@@ -55,7 +60,7 @@ export default ({ apiKey, use4k }: Options) => {
                 },
               },
             },
-            required: ["variablesToRename"],
+            required: ["variablesAndFunctionsToRename"],
           },
         },
       ],
@@ -68,13 +73,13 @@ export default ({ apiKey, use4k }: Options) => {
         { role: "user", content: code },
       ],
     });
-    const data = chatCompletion.data.choices[0];
+    const data = chatCompletion.choices[0];
     if (data.finish_reason !== "function_call") return [];
 
     const {
       variablesAndFunctionsToRename,
     }: { variablesAndFunctionsToRename: Rename[] } = JSON.parse(
-      fixPerhapsBrokenResponse(data.message?.function_call?.arguments!)
+      fixPerhapsBrokenResponse(data.message?.function_call?.arguments!),
     );
 
     return variablesAndFunctionsToRename;
@@ -82,9 +87,5 @@ export default ({ apiKey, use4k }: Options) => {
 };
 
 function fixPerhapsBrokenResponse(jsonResponse: string) {
-  // Sometimes the response has an extra comma at the end of the array, like:
-  // {"result": [{"foo": "bar"}, { "foo": "baz" },\n ]}
-  // This is invalid JSON, so we need to remove the comma.
-
   return jsonResponse.replace(/},\s*]/im, "}]");
 }
