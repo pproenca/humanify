@@ -4,7 +4,7 @@ export const transformWithPlugins = async (
   code: string,
   plugins: PluginItem[]
 ): Promise<string> => {
-  return await new Promise((resolve, reject) =>
+  return await new Promise((resolve) =>
     transform(
       code,
       {
@@ -20,7 +20,10 @@ export const transformWithPlugins = async (
       },
       (err, result) => {
         if (err || !result) {
-          reject(err);
+          // If parsing fails (e.g., non-JS content), return original code
+          const errorMessage = (err as Error)?.message?.split("\n")[0] ?? "Unknown error";
+          console.warn(`Babel transform skipped: ${errorMessage}`);
+          resolve(code);
         } else {
           resolve(result.code as string);
         }

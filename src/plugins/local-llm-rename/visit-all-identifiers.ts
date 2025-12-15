@@ -16,17 +16,28 @@ export async function visitAllIdentifiers(
   contextWindowSize: number,
   onProgress?: (percentageDone: number) => void
 ) {
-  const ast = await parseAsync(code, {
-    sourceType: "unambiguous",
-    parserOpts: {
-      plugins: ["decorators-legacy", "typescript", "jsx"]
-    }
-  });
+  let ast;
+  try {
+    ast = await parseAsync(code, {
+      sourceType: "unambiguous",
+      parserOpts: {
+        plugins: ["decorators-legacy", "typescript", "jsx"]
+      }
+    });
+  } catch (error) {
+    // If parsing fails (e.g., non-JS content), return original code unchanged
+    const errorMessage = (error as Error)?.message?.split("\n")[0] ?? "Unknown error";
+    console.warn(`Identifier renaming skipped (parse failed): ${errorMessage}`);
+    onProgress?.(1);
+    return code;
+  }
   const renames = new Set<string>();
   const visited = new Set<string>();
 
   if (!ast) {
-    throw new Error("Failed to parse code");
+    console.warn("Identifier renaming skipped: AST is null");
+    onProgress?.(1);
+    return code;
   }
 
   const scopes = await findScopes(ast);
