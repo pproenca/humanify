@@ -9,6 +9,9 @@ export const transformWithPlugins = async (
       code,
       {
         plugins,
+        parserOpts: {
+          plugins: ["decorators-legacy", "typescript", "jsx"]
+        },
         compact: false,
         minified: false,
         comments: false,
